@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>課堂抽籤系統 - 數感實驗室</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons for modern classroom aesthetics -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          },
+          animation: {
+            'bounce-short': 'bounce 0.6s ease-in-out 2',
+            'pulse-fast': 'pulse 0.4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.6);
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    /* Fullscreen & Theater mode zero-scroll layout enforcement */
+    :fullscreen body, 
+    html:fullscreen body,
+    body:fullscreen,
+    body.theater-mode {
+      height: 100vh !important;
+      max-height: 100vh !important;
+      overflow: hidden !important;
+    }
+    :fullscreen main, 
+    html:fullscreen main,
+    body:fullscreen main,
+    body.theater-mode main {
+      height: calc(100vh - 100px) !important;
+      max-height: calc(100vh - 100px) !important;
+      overflow: hidden !important;
+    }
+    body.theater-mode {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      z-index: 99999 !important;
+      background-color: #f1f5f9 !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen lg:h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white overflow-y-auto lg:overflow-hidden">
+
+  <!-- Confetti Canvas for Victory Celebrations -->
+  <canvas id="confettiCanvas" class="fixed inset-0 pointer-events-none z-50 w-full h-full"></canvas>
+
+  <!-- Navigation / Header Bar -->
+  <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-all shadow-xs flex-shrink-0">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      <!-- Title & Version Info -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 flex-shrink-0">
+          <i class="ph-bold ph-ticket text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-black text-slate-800 tracking-tight">
+              課堂抽籤系統
+            </h1>
+            <!-- Version Control Badge (Incremented to v1.7.0) -->
+            <span id="appVersionBadge" class="text-[11px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-300/80 px-2.5 py-0.5 rounded-full shadow-xs" title="系統版本控制編號">
+              v1.7.0
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 hidden xs:block">互動問答 • 分組選號 • 課堂隨堂點名</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Controls (Pure Icons) -->
+      <div class="flex items-center gap-2">
+        <button id="soundToggleBtn" aria-label="開關音效" class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 flex items-center justify-center transition touch-target" title="開關音效">
+          <i id="soundIcon" class="ph-bold ph-speaker-high text-lg text-indigo-600"></i>
+        </button>
+
+        <button id="settingsModalBtn" aria-label="人數與名單設定" class="w-10 h-10 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 flex items-center justify-center transition touch-target" title="人數與名單設定">
+          <i class="ph-bold ph-faders text-lg"></i>
+        </button>
+
+        <button id="fullscreenBtn" aria-label="全螢幕投影模式" class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 flex items-center justify-center transition touch-target" title="全螢幕投影模式">
+          <i id="fullscreenIcon" class="ph-bold ph-corners-out text-lg"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace: Zero-scroll two-column desktop layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 min-h-0">
+
+    <!-- Left & Center: Lucky Draw Arena (7 cols on lg, 8 cols on xl) -->
+    <div class="lg:col-span-7 xl:col-span-8 flex flex-col gap-3 min-h-0 h-full">
+      
+      <!-- Drawing Stage Card -->
+      <div class="flex-1 min-h-[350px] sm:min-h-[400px] bg-gradient-to-br from-white via-indigo-50/25 to-slate-50 border border-slate-200/90 rounded-3xl p-4 sm:p-5 shadow-lg shadow-slate-200/50 flex flex-col justify-between items-center relative overflow-hidden">
+        
+        <!-- Status Indicator Pill & Reset -->
+        <div class="w-full flex items-center justify-between z-10 flex-shrink-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="poolStatusBadge" class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 shadow-xs">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              待抽候選：<span id="remainingCount">21</span> / <span id="totalStudentsDisplay">21</span> 人
+            </span>
+            <span id="modeStatusBadge" class="inline-flex text-xs sm:text-sm font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200/70">
+              不重複模式
+            </span>
+          </div>
+
+          <button id="quickResetDrawBtn" class="text-xs sm:text-sm font-bold text-slate-600 hover:text-indigo-600 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-xs active:scale-95 touch-target" title="重設籤筒狀態，放回已抽出的同學">
+            <i class="ph-bold ph-arrow-counter-clockwise text-base text-indigo-600"></i>
+            <span class="hidden xs:inline">重設籤筒</span>
+          </button>
+        </div>
+
+        <!-- Center Huge Result Display Screen (Strictly single horizontal row) -->
+        <div class="w-full flex-1 min-h-0 flex flex-col items-center justify-center my-2">
+          <!-- Main Selected Numbers Container -->
+          <div id="resultDisplayBox" class="w-full flex-1 min-h-0 flex flex-nowrap items-center justify-center gap-2 sm:gap-3 py-2 px-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
+            <!-- Default Single Hero Card -->
+            <div id="heroCard" class="h-full max-h-[38vh] aspect-square rounded-3xl bg-white border-4 border-indigo-500 shadow-xl flex items-center justify-center text-center p-2 transform transition-all duration-300">
+              <span id="heroNumber" class="text-7xl sm:text-8xl md:text-9xl font-black text-slate-800 leading-none select-none">
+                ?
+              </span>
+            </div>
+          </div>
+          
+          <!-- Animated Rolling Hint -->
+          <div id="drawStatusHint" class="text-xs sm:text-sm font-semibold text-slate-400 flex items-center justify-center gap-1.5 text-center mt-1 flex-shrink-0">
+            <i class="ph-bold ph-keyboard text-slate-500 text-sm"></i>
+            <span>空白鍵 (Space) 可快速抽籤</span>
+          </div>
+        </div>
+
+        <!-- Action Controls Bar -->
+        <div class="w-full flex flex-col sm:flex-row items-center justify-center gap-2.5 z-10 pt-2 border-t border-slate-100 flex-shrink-0">
+          <!-- Draw Count Selector (1~6 位) -->
+          <div class="w-full sm:w-auto flex items-center justify-between sm:justify-start bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-600 overflow-x-auto">
+            <span class="px-2 text-slate-500 whitespace-nowrap">人數:</span>
+            <div class="flex items-center gap-1">
+              <button data-pick="1" class="pick-count-btn px-2.5 py-1.5 rounded-xl bg-white text-indigo-600 shadow-xs font-black transition">1</button>
+              <button data-pick="2" class="pick-count-btn px-2.5 py-1.5 rounded-xl hover:bg-white/70 transition font-bold">2</button>
+              <button data-pick="3" class="pick-count-btn px-2.5 py-1.5 rounded-xl hover:bg-white/70 transition font-bold">3</button>
+              <button data-pick="4" class="pick-count-btn px-2.5 py-1.5 rounded-xl hover:bg-white/70 transition font-bold">4</button>
+              <button data-pick="5" class="pick-count-btn px-2.5 py-1.5 rounded-xl hover:bg-white/70 transition font-bold">5</button>
+              <button data-pick="6" class="pick-count-btn px-2.5 py-1.5 rounded-xl hover:bg-white/70 transition font-bold">6</button>
+            </div>
+          </div>
+
+          <!-- Giant Draw Trigger Button -->
+          <button id="startDrawBtn" class="w-full sm:w-auto px-7 sm:px-9 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-95 text-white font-black text-base sm:text-lg rounded-2xl shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 touch-target">
+            <i class="ph-fill ph-shuffle text-xl animate-spin-hover"></i>
+            <span id="startBtnLabel">隨機抽一位！</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Toggles & Class Statistics Bar -->
+      <div class="bg-white border border-slate-200/90 rounded-2xl px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs shadow-xs flex-shrink-0">
+        <div class="flex items-center flex-wrap gap-4">
+          <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+            <input type="checkbox" id="noRepeatToggle" checked class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500">
+            <span>不重複抽取</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+            <input type="checkbox" id="fastModeToggle" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500">
+            <span>極速模式</span>
+          </label>
+        </div>
+
+        <div class="flex items-center gap-2 text-slate-500 font-medium">
+          <span>全班: <strong id="statsTotal" class="text-slate-800 font-bold">21</strong></span>
+          <span>•</span>
+          <span>已抽: <strong id="statsDrawn" class="text-indigo-600 font-bold">0</strong></span>
+          <span>•</span>
+          <span>請假: <strong id="statsAbsent" class="text-amber-600 font-bold">0</strong></span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: Student Roster Grid & Status Overview (5 cols on lg, 4 cols on xl) -->
+    <div class="lg:col-span-5 xl:col-span-4 flex flex-col h-full min-h-0">
+      <div class="bg-white border border-slate-200/90 rounded-3xl p-3.5 sm:p-4 shadow-xs flex flex-col h-full min-h-0">
+        <!-- Roster Header -->
+        <div class="flex flex-col gap-2 pb-2.5 border-b border-slate-100 flex-shrink-0">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+              <i class="ph-bold ph-users-three text-indigo-600 text-lg"></i>
+              全班名單與狀態
+            </h2>
+            <span class="text-[11px] text-slate-400 font-medium">點擊切換狀態</span>
+          </div>
+
+          <!-- Status Legend -->
+          <div class="flex items-center justify-between text-xs font-semibold bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-100">
+            <span class="flex items-center gap-1 text-slate-700">
+              <span class="w-2.5 h-2.5 rounded-full bg-white border-2 border-indigo-500 inline-block"></span> 待抽
+            </span>
+            <span class="flex items-center gap-1 text-slate-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block"></span> 已抽中
+            </span>
+            <span class="flex items-center gap-1 text-amber-600">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> 請假略過
+            </span>
+          </div>
+        </div>
+
+        <!-- Student Badges Grid: Clean grid layout -->
+        <div id="studentGrid" class="flex-1 min-h-0 py-2 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-2 overflow-y-auto pr-1 custom-scrollbar">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- Quick Help Footnote -->
+        <div class="pt-2 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between flex-shrink-0">
+          <span>點擊號碼可切換請假，已抽中點擊可放回籤筒</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Settings Modal (Drawer / Popup) -->
+  <div id="settingsModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-3 sm:p-4 transition-opacity">
+    <div id="settingsModalCard" class="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-100 transform transition-all">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+            <i class="ph-bold ph-gear text-lg"></i>
+          </div>
+          <h2 class="text-base sm:text-lg font-bold text-slate-800">班級名單與人數設定</h2>
+        </div>
+        <button id="closeSettingsBtn" class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition touch-target">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-sm">
+        <!-- Adjust Number of Students -->
+        <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+          <label class="block font-bold text-slate-700 mb-1.5">班級總人數 (預設 21 人)</label>
+          <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div class="flex items-center gap-2">
+              <button id="decreaseCountBtn" class="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 font-bold text-slate-700 text-lg flex items-center justify-center transition active:scale-95 touch-target">-</button>
+              <input type="number" id="classSizeInput" min="1" max="100" value="21" class="w-20 text-center font-black text-xl px-2 py-1.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <button id="increaseCountBtn" class="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 font-bold text-slate-700 text-lg flex items-center justify-center transition active:scale-95 touch-target">+</button>
+            </div>
+            <button id="applyCountBtn" class="ml-auto px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl text-xs transition shadow-xs">
+              重設為純座號 (1~N 號)
+            </button>
+          </div>
+          <p class="text-xs text-slate-400 mt-1.5">微調人數後點擊按鈕，即可立即生成指定人數的純號碼籤筒。</p>
+        </div>
+
+        <!-- Custom Student Names / Roster Textarea -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-bold text-slate-700">自訂姓名名冊</label>
+            <span class="text-[11px] text-slate-400">每行一位學生（支援自 Excel 貼上）</span>
+          </div>
+          <textarea id="customRosterTextarea" rows="4" class="w-full text-xs font-mono p-3 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none custom-scrollbar" placeholder="例如：&#10;1. 王小明&#10;2. 陳小華&#10;3. 林美美&#10;或直接貼上純姓名..."></textarea>
+          <p class="text-[11px] text-slate-400 mt-1">若名冊含有前綴座號（例如「1. 王小明」），系統會自動貼心過濾為整潔的姓名。</p>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+          <button id="resetDefault21Btn" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer p-1">
+            恢復預設值 (21人)
+          </button>
+          <div class="flex gap-2">
+            <button id="cancelSettingsBtn" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs transition touch-target">
+              取消
+            </button>
+            <button id="saveRosterBtn" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs transition shadow-sm touch-target">
+              儲存並套用名單
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Notification Toast -->
+  <div id="toastNotification" class="fixed bottom-14 sm:bottom-16 right-4 sm:right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-slate-800 text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 max-w-sm pointer-events-none">
+    <i id="toastIcon" class="ph-bold ph-info text-indigo-400 text-base flex-shrink-0"></i>
+    <span id="toastMessage">已更新設定</span>
+  </div>
+
+  <!-- Page Footer (Centered text requirement strictly followed) -->
+  <footer class="w-full py-2.5 px-4 text-center text-xs font-medium text-slate-500 border-t border-slate-200/80 bg-white/70 backdrop-blur-sm flex-shrink-0 select-text">
+    <span>班級百寶箱&nbsp;&nbsp;|&nbsp;&nbsp;Design：S.C. Kuo</span>
+  </footer>
+
+  <script>
+    /* ========================================================
+       Global State & Synthesizer Setup
+       ======================================================== */
+    const state = {
+      version: 'v1.7.0',
+      totalCount: 21,
+      students: [],         // Array of { id: number, name: string, status: 'available'|'drawn'|'absent' }
+      pickCount: 1,         // 1, 2, 3, 4, 5, 6
+      isRolling: false,
+      noRepeat: true,
+      soundEnabled: true,
+      fastMode: false
+    };
+
+    // Web Audio Synthesizer (Zero external dependencies)
+    let audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // Play rolling tick click sound
+    function playTickSound() {
+      if (!state.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320 + Math.random() * 220, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.045);
+      } catch (e) {
+        console.warn('Audio tick suppressed', e);
+      }
+    }
+
+    // Play celebratory chord upon pick completion
+    function playWinSound() {
+      if (!state.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08);
+          gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + idx * 0.08 + 0.55);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + idx * 0.08);
+          osc.stop(ctx.currentTime + idx * 0.08 + 0.6);
+        });
+      } catch (e) {
+        console.warn('Audio win suppressed', e);
+      }
+    }
+
+    /* ========================================================
+       Roster Initialization & Status Management
+       ======================================================== */
+    function cleanStudentName(rawName) {
+      if (!rawName) return '';
+      return rawName.replace(/^\s*\d+[\.、\s\-\:]\s*/, '').trim();
+    }
+
+    function initializeDefaultStudents(count = 21, customNames = null) {
+      state.totalCount = count;
+      state.students = [];
+
+      if (customNames && Array.isArray(customNames) && customNames.length > 0) {
+        state.totalCount = customNames.length;
+        customNames.forEach((name, idx) => {
+          const cleaned = cleanStudentName(name);
+          state.students.push({
+            id: idx + 1,
+            name: cleaned || `${idx + 1} 號`,
+            status: 'available'
+          });
+        });
+      } else {
+        for (let i = 1; i <= count; i++) {
+          state.students.push({
+            id: i,
+            name: `${i} 號`,
+            status: 'available'
+          });
+        }
+      }
+
+      renderStudentGrid();
+      updateStats();
+      resetHeroCard();
+    }
+
+    function handleStudentClick(studentId) {
+      if (state.isRolling) return;
+      const student = state.students.find(s => s.id === studentId);
+      if (!student) return;
+
+      if (student.status === 'drawn') {
+        student.status = 'available';
+        showToast(`已將 ${student.id} 號放回抽籤籤筒！`, 'check');
+      } else if (student.status === 'available') {
+        student.status = 'absent';
+        showToast(`已將 ${student.id} 號標記為【請假/略過】`, 'minus');
+      } else if (student.status === 'absent') {
+        student.status = 'available';
+        showToast(`已將 ${student.id} 號恢復為【出席/待抽】`, 'check');
+      }
+
+      renderStudentGrid();
+      updateStats();
+    }
+
+    function renderStudentGrid() {
+      const grid = document.getElementById('studentGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      state.students.forEach(student => {
+        const btn = document.createElement('button');
+        btn.setAttribute('type', 'button');
+        btn.dataset.id = student.id;
+
+        let badgeClasses = 'py-2 px-1.5 rounded-xl border text-center transition flex flex-col items-center justify-center text-xs font-bold cursor-pointer touch-target ';
+        let hintTitle = '';
+
+        if (student.status === 'available') {
+          badgeClasses += 'bg-white border-slate-200/90 text-slate-800 hover:border-indigo-400 hover:shadow-xs active:scale-95';
+          hintTitle = '目前待抽中（點擊設為請假）';
+        } else if (student.status === 'drawn') {
+          badgeClasses += 'bg-slate-100 border-slate-200 text-slate-400 line-through opacity-70 hover:opacity-100 hover:border-indigo-300';
+          hintTitle = '已抽出（點擊放回籤筒）';
+        } else if (student.status === 'absent') {
+          badgeClasses += 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100';
+          hintTitle = '請假略過中（點擊恢復出席）';
+        }
+
+        btn.className = badgeClasses;
+        btn.title = `${student.id} 號 ${student.name} - ${hintTitle}`;
+        btn.innerHTML = `
+          <span class="text-sm font-black">${student.id}</span>
+          <span class="text-[11px] truncate w-full font-medium opacity-90">${student.name}</span>
+        `;
+
+        btn.addEventListener('click', () => handleStudentClick(student.id));
+        grid.appendChild(btn);
+      });
+    }
+
+    function updateStats() {
+      const total = state.students.length;
+      const available = state.students.filter(s => s.status === 'available').length;
+      const drawn = state.students.filter(s => s.status === 'drawn').length;
+      const absent = state.students.filter(s => s.status === 'absent').length;
+
+      const totalEl = document.getElementById('totalStudentsDisplay');
+      const remEl = document.getElementById('remainingCount');
+      const statsTotEl = document.getElementById('statsTotal');
+      const statsDrawnEl = document.getElementById('statsDrawn');
+      const statsAbsentEl = document.getElementById('statsAbsent');
+
+      if (totalEl) totalEl.textContent = total;
+      if (remEl) remEl.textContent = state.noRepeat ? available : (total - absent);
+      if (statsTotEl) statsTotEl.textContent = total;
+      if (statsDrawnEl) statsDrawnEl.textContent = drawn;
+      if (statsAbsentEl) statsAbsentEl.textContent = absent;
+
+      const badge = document.getElementById('poolStatusBadge');
+      if (badge) {
+        if (!state.noRepeat) {
+          badge.className = 'inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 shadow-xs';
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> 可重複抽取模式（候選：${total - absent} / ${total} 人）`;
+        } else if (available === 0) {
+          badge.className = 'inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 py-1 rounded-full bg-rose-100 text-rose-800 shadow-xs';
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> 籤筒已抽空！請點擊重設籤筒`;
+        } else {
+          badge.className = 'inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 shadow-xs';
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 待抽候選：${available} / ${total} 人`;
+        }
+      }
+    }
+
+    function resetHeroCard() {
+      const box = document.getElementById('resultDisplayBox');
+      if (!box) return;
+      box.innerHTML = `
+        <div id="heroCard" class="h-full max-h-[38vh] aspect-square rounded-3xl bg-white border-4 border-indigo-500 shadow-xl flex items-center justify-center text-center p-2 transform transition-all duration-300">
+          <span id="heroNumber" class="text-7xl sm:text-8xl md:text-9xl font-black text-slate-800 leading-none select-none">?</span>
+        </div>
+      `;
+    }
+
+    /* ========================================================
+       Drawing Animation & Random Selection
+       ======================================================== */
+    function startDraw() {
+      if (state.isRolling) return;
+      getAudioContext();
+
+      let candidatePool = state.noRepeat 
+        ? state.students.filter(s => s.status === 'available')
+        : state.students.filter(s => s.status !== 'absent');
+
+      if (candidatePool.length === 0) {
+        showToast('目前沒有可抽取的學生，請點擊「重設籤筒」或檢查請假名單！', 'warning');
+        return;
+      }
+
+      const actualCountToPick = Math.min(state.pickCount, candidatePool.length);
+      if (state.pickCount > candidatePool.length) {
+        showToast(`籤筒僅餘 ${candidatePool.length} 位學生，本次抽出 ${candidatePool.length} 位`, 'info');
+      }
+
+      state.isRolling = true;
+      const startBtn = document.getElementById('startDrawBtn');
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.classList.add('opacity-75');
+      }
+      const label = document.getElementById('startBtnLabel');
+      if (label) label.textContent = '抽選中...';
+
+      const box = document.getElementById('resultDisplayBox');
+      if (!box) return;
+      
+      // If picking multiple candidates, build slot cards in a single horizontal row
+      if (actualCountToPick > 1) {
+        box.innerHTML = '';
+        for (let i = 0; i < actualCountToPick; i++) {
+          const card = document.createElement('div');
+          card.id = `multiCard_${i}`;
+          card.className = 'flex-1 min-w-[45px] max-w-[130px] h-full max-h-[36vh] aspect-[4/5] sm:aspect-square rounded-2xl sm:rounded-3xl bg-white border-2 sm:border-4 border-indigo-400 shadow-lg flex items-center justify-center text-center p-1 sm:p-2 animate-pulse';
+          card.innerHTML = `
+            <span class="multi-num text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-slate-800 leading-none">--</span>
+          `;
+          box.appendChild(card);
+        }
+      } else {
+        box.innerHTML = `
+          <div id="heroCard" class="h-full max-h-[38vh] aspect-square rounded-3xl bg-white border-4 border-indigo-500 shadow-xl flex items-center justify-center text-center p-2">
+            <span id="heroNumber" class="text-7xl sm:text-8xl md:text-9xl font-black text-indigo-600 animate-bounce-short leading-none">--</span>
+          </div>
+        `;
+      }
+
+      if (state.fastMode) {
+        finishDraw(candidatePool, actualCountToPick);
+        return;
+      }
+
+      let rollTicks = 0;
+      const totalTicks = 20;
+      const intervalTime = 65;
+
+      const rollTimer = setInterval(() => {
+        rollTicks++;
+        playTickSound();
+
+        if (actualCountToPick === 1) {
+          const randomPreview = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+          const heroNum = document.getElementById('heroNumber');
+          if (heroNum) heroNum.textContent = randomPreview.id;
+        } else {
+          for (let i = 0; i < actualCountToPick; i++) {
+            const card = document.getElementById(`multiCard_${i}`);
+            if (card) {
+              const randomPreview = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+              const numEl = card.querySelector('.multi-num');
+              if (numEl) numEl.textContent = randomPreview.id;
+            }
+          }
+        }
+
+        if (rollTicks >= totalTicks) {
+          clearInterval(rollTimer);
+          finishDraw(candidatePool, actualCountToPick);
+        }
+      }, intervalTime);
+    }
+
+    function finishDraw(candidatePool, countToPick) {
+      const poolCopy = [...candidatePool];
+      for (let i = poolCopy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [poolCopy[i], poolCopy[j]] = [poolCopy[j], poolCopy[i]];
+      }
+
+      const winners = poolCopy.slice(0, countToPick);
+
+      if (state.noRepeat) {
+        winners.forEach(winner => {
+          const st = state.students.find(s => s.id === winner.id);
+          if (st) st.status = 'drawn';
+        });
+      }
+
+      const box = document.getElementById('resultDisplayBox');
+      if (box) {
+        if (winners.length === 1) {
+          const winner = winners[0];
+          box.innerHTML = `
+            <div class="h-full max-h-[38vh] aspect-square rounded-3xl bg-gradient-to-b from-indigo-50 to-white border-4 border-indigo-600 shadow-2xl flex items-center justify-center text-center p-2 transform transition scale-105 animate-bounce-short">
+              <span class="text-7xl sm:text-8xl md:text-[9rem] font-black text-slate-900 tracking-tight leading-none">${winner.id}</span>
+            </div>
+          `;
+        } else {
+          box.innerHTML = '';
+          winners.forEach((winner) => {
+            const card = document.createElement('div');
+            card.className = 'flex-1 min-w-[45px] max-w-[130px] h-full max-h-[36vh] aspect-[4/5] sm:aspect-square rounded-2xl sm:rounded-3xl bg-gradient-to-b from-indigo-50/70 to-white border-2 sm:border-4 border-indigo-500 shadow-lg flex items-center justify-center text-center p-1 sm:p-2 transform transition hover:scale-105 animate-bounce-short';
+            card.innerHTML = `
+              <span class="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-slate-900 leading-none">${winner.id}</span>
+            `;
+            box.appendChild(card);
+          });
+        }
+      }
+
+      playWinSound();
+      triggerConfetti();
+      renderStudentGrid();
+      updateStats();
+
+      state.isRolling = false;
+      const startBtn = document.getElementById('startDrawBtn');
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.classList.remove('opacity-75');
+      }
+      const btnLabel = document.getElementById('startBtnLabel');
+      if (btnLabel) {
+        btnLabel.textContent = state.pickCount > 1 ? `隨機抽 ${state.pickCount} 位！` : '隨機抽一位！';
+      }
+    }
+
+    function resetLotteryPool() {
+      if (state.isRolling) return;
+      state.students.forEach(s => {
+        if (s.status === 'drawn') {
+          s.status = 'available';
+        }
+      });
+      renderStudentGrid();
+      updateStats();
+      resetHeroCard();
+      const btnLabel = document.getElementById('startBtnLabel');
+      if (btnLabel) {
+        btnLabel.textContent = state.pickCount > 1 ? `隨機抽 ${state.pickCount} 位！` : '隨機抽一位！';
+      }
+      showToast('已重設抽籤籤筒！所有抽出的學生已放回', 'check');
+    }
+
+    /* ========================================================
+       Confetti Canvas Effect
+       ======================================================== */
+    const canvas = document.getElementById('confettiCanvas');
+    const ctx = canvas.getContext('2d');
+    let confettiParticles = [];
+    let animationFrameId = null;
+
+    function resizeCanvas() {
+      if (!canvas) return;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function triggerConfetti() {
+      if (!canvas) return;
+      confettiParticles = [];
+      const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+      for (let i = 0; i < 90; i++) {
+        confettiParticles.push({
+          x: canvas.width / 2,
+          y: canvas.height * 0.45,
+          r: Math.random() * 6 + 4,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 14,
+          vy: (Math.random() - 0.7) * 16,
+          tilt: Math.random() * 10,
+          tiltAngle: 0,
+          tiltAngleInc: Math.random() * 0.1 + 0.05,
+          opacity: 1
+        });
+      }
+
+      if (!animationFrameId) {
+        animateConfetti();
+      }
+    }
+
+    function animateConfetti() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < confettiParticles.length; i++) {
+        const p = confettiParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.35;
+        p.tiltAngle += p.tiltAngleInc;
+        p.tilt = Math.sin(p.tiltAngle) * 12;
+        p.opacity -= 0.012;
+
+        ctx.beginPath();
+        ctx.lineWidth = p.r;
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = Math.max(0, p.opacity);
+        ctx.moveTo(p.x + p.tilt, p.y);
+        ctx.lineTo(p.x, p.y + p.tilt + p.r / 2);
+        ctx.stroke();
+      }
+
+      confettiParticles = confettiParticles.filter(p => p.opacity > 0 && p.y < canvas.height);
+
+      if (confettiParticles.length > 0) {
+        animationFrameId = requestAnimationFrame(animateConfetti);
+      } else {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    /* ========================================================
+       Toast Notifications & Modal Controller
+       ======================================================== */
+    let toastTimeout = null;
+    function showToast(message, iconType = 'info') {
+      const toast = document.getElementById('toastNotification');
+      const msgSpan = document.getElementById('toastMessage');
+      const icon = document.getElementById('toastIcon');
+      if (!toast || !msgSpan || !icon) return;
+
+      msgSpan.textContent = message;
+
+      if (iconType === 'check') icon.className = 'ph-bold ph-check-circle text-emerald-400 text-base flex-shrink-0';
+      else if (iconType === 'warning') icon.className = 'ph-bold ph-warning-circle text-amber-400 text-base flex-shrink-0';
+      else if (iconType === 'minus') icon.className = 'ph-bold ph-minus-circle text-amber-400 text-base flex-shrink-0';
+      else if (iconType === 'trash') icon.className = 'ph-bold ph-trash text-rose-400 text-base flex-shrink-0';
+      else icon.className = 'ph-bold ph-info text-indigo-400 text-base flex-shrink-0';
+
+      toast.classList.remove('translate-y-24', 'opacity-0');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 2600);
+    }
+
+    /* ========================================================
+       Event Listeners & Robust Initialization
+       ======================================================== */
+    function initializeClassroomApp() {
+      // 1. Initialize default 21 students
+      initializeDefaultStudents(21);
+
+      // 2. Start Draw Button Click
+      const startBtn = document.getElementById('startDrawBtn');
+      if (startBtn) {
+        startBtn.addEventListener('click', startDraw);
+      }
+
+      // 3. Global Keyboard Shortcuts (Space to draw, Esc to exit modals/theater mode)
+      window.addEventListener('keydown', (e) => {
+        const activeTag = document.activeElement ? document.activeElement.tagName : '';
+        const modal = document.getElementById('settingsModal');
+        const isModalOpen = modal && !modal.classList.contains('hidden');
+
+        if (e.code === 'Space' && activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && !isModalOpen) {
+          e.preventDefault();
+          startDraw();
+        } else if (e.code === 'Escape') {
+          if (modal && !modal.classList.contains('hidden')) {
+            modal.classList.add('hidden');
+          }
+          if (document.body.classList.contains('theater-mode')) {
+            document.body.classList.remove('theater-mode');
+            syncFullscreenIcon();
+          }
+        }
+      });
+
+      // 4. Quick Reset Draw Pool Button
+      const quickResetBtn = document.getElementById('quickResetDrawBtn');
+      if (quickResetBtn) {
+        quickResetBtn.addEventListener('click', resetLotteryPool);
+      }
+
+      // 5. Pick Count Buttons (1~6 位)
+      document.querySelectorAll('.pick-count-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (state.isRolling) return;
+          document.querySelectorAll('.pick-count-btn').forEach(b => {
+            b.classList.remove('bg-white', 'text-indigo-600', 'shadow-xs', 'font-black');
+            b.classList.add('hover:bg-white/70', 'font-bold');
+          });
+          btn.classList.add('bg-white', 'text-indigo-600', 'shadow-xs', 'font-black');
+          btn.classList.remove('hover:bg-white/70');
+
+          state.pickCount = parseInt(btn.dataset.pick, 10);
+          const lbl = document.getElementById('startBtnLabel');
+          if (lbl) {
+            lbl.textContent = state.pickCount > 1 ? `隨機抽 ${state.pickCount} 位！` : '隨機抽一位！';
+          }
+        });
+      });
+
+      // 6. Settings Modal Handlers
+      const settingsModal = document.getElementById('settingsModal');
+      const settingsModalCard = document.getElementById('settingsModalCard');
+
+      const openSettings = () => {
+        const classInput = document.getElementById('classSizeInput');
+        const rosterArea = document.getElementById('customRosterTextarea');
+        if (classInput) classInput.value = state.totalCount;
+        
+        // Populate textarea only if custom names exist, else keep clean placeholder
+        const hasCustom = state.students.some(s => s.name && s.name !== `${s.id} 號`);
+        if (rosterArea) {
+          rosterArea.value = hasCustom ? state.students.map(s => s.name).join('\n') : '';
+        }
+        if (settingsModal) settingsModal.classList.remove('hidden');
+      };
+      const closeSettings = () => {
+        if (settingsModal) settingsModal.classList.add('hidden');
+      };
+
+      const settingsBtn = document.getElementById('settingsModalBtn');
+      if (settingsBtn) settingsBtn.addEventListener('click', openSettings);
+      const closeBtn = document.getElementById('closeSettingsBtn');
+      if (closeBtn) closeBtn.addEventListener('click', closeSettings);
+      const cancelBtn = document.getElementById('cancelSettingsBtn');
+      if (cancelBtn) cancelBtn.addEventListener('click', closeSettings);
+
+      if (settingsModal && settingsModalCard) {
+        settingsModal.addEventListener('click', (e) => {
+          if (!settingsModalCard.contains(e.target)) {
+            closeSettings();
+          }
+        });
+      }
+
+      // Counter +/- and Enter Key Support
+      const classSizeInput = document.getElementById('classSizeInput');
+      if (classSizeInput) {
+        classSizeInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const applyBtn = document.getElementById('applyCountBtn');
+            if (applyBtn) applyBtn.click();
+          }
+        });
+      }
+
+      const decBtn = document.getElementById('decreaseCountBtn');
+      if (decBtn) {
+        decBtn.addEventListener('click', () => {
+          const inp = document.getElementById('classSizeInput');
+          if (!inp) return;
+          let val = Math.max(1, parseInt(inp.value, 10) - 1);
+          inp.value = val;
+        });
+      }
+      const incBtn = document.getElementById('increaseCountBtn');
+      if (incBtn) {
+        incBtn.addEventListener('click', () => {
+          const inp = document.getElementById('classSizeInput');
+          if (!inp) return;
+          let val = Math.min(100, parseInt(inp.value, 10) + 1);
+          inp.value = val;
+        });
+      }
+
+      // Reset to Pure Numbers (1~N)
+      const applyCountBtn = document.getElementById('applyCountBtn');
+      if (applyCountBtn) {
+        applyCountBtn.addEventListener('click', () => {
+          const inp = document.getElementById('classSizeInput');
+          const count = Math.max(1, Math.min(100, parseInt(inp ? inp.value : 21, 10) || 21));
+          initializeDefaultStudents(count);
+          closeSettings();
+          showToast(`已重設為全班 ${count} 位號碼 (1 ~ ${count} 號)`, 'check');
+        });
+      }
+
+      // Reset to Default 21
+      const resetDefaultBtn = document.getElementById('resetDefault21Btn');
+      if (resetDefaultBtn) {
+        resetDefaultBtn.addEventListener('click', () => {
+          const inp = document.getElementById('classSizeInput');
+          const txt = document.getElementById('customRosterTextarea');
+          if (inp) inp.value = 21;
+          if (txt) txt.value = '';
+          initializeDefaultStudents(21);
+          closeSettings();
+          showToast('已恢復預設班級 21 人！', 'check');
+        });
+      }
+
+      // Save Custom Roster from Textarea or Input Count
+      const saveRosterBtn = document.getElementById('saveRosterBtn');
+      if (saveRosterBtn) {
+        saveRosterBtn.addEventListener('click', () => {
+          const txt = document.getElementById('customRosterTextarea');
+          const rawText = txt ? txt.value.trim() : '';
+          if (rawText.length > 0) {
+            const names = rawText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+            if (names.length > 0) {
+              initializeDefaultStudents(names.length, names);
+              closeSettings();
+              showToast(`已成功套用自訂名單，共 ${names.length} 位學生！`, 'check');
+              return;
+            }
+          }
+          const inp = document.getElementById('classSizeInput');
+          const count = Math.max(1, Math.min(100, parseInt(inp ? inp.value : 21, 10) || 21));
+          initializeDefaultStudents(count);
+          closeSettings();
+          showToast(`已套用班級人數：${count} 位 (純號碼)`, 'check');
+        });
+      }
+
+      // 7. No Repeat & Fast Mode Toggles
+      const noRepeatToggle = document.getElementById('noRepeatToggle');
+      if (noRepeatToggle) {
+        noRepeatToggle.addEventListener('change', (e) => {
+          state.noRepeat = e.target.checked;
+          const modeBadge = document.getElementById('modeStatusBadge');
+          if (modeBadge) {
+            if (state.noRepeat) {
+              modeBadge.textContent = '不重複模式';
+              modeBadge.className = 'inline-flex text-xs sm:text-sm font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200/70';
+            } else {
+              modeBadge.textContent = '可重複抽取';
+              modeBadge.className = 'inline-flex text-xs sm:text-sm font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200/80';
+            }
+          }
+          updateStats();
+        });
+      }
+
+      const fastModeToggle = document.getElementById('fastModeToggle');
+      if (fastModeToggle) {
+        fastModeToggle.addEventListener('change', (e) => {
+          state.fastMode = e.target.checked;
+        });
+      }
+
+      // 8. Sound Toggle Button
+      const soundBtn = document.getElementById('soundToggleBtn');
+      if (soundBtn) {
+        soundBtn.addEventListener('click', () => {
+          state.soundEnabled = !state.soundEnabled;
+          if (state.soundEnabled) {
+            getAudioContext();
+          }
+          const icon = document.getElementById('soundIcon');
+          if (icon) {
+            if (state.soundEnabled) {
+              icon.className = 'ph-bold ph-speaker-high text-lg text-indigo-600';
+              soundBtn.title = '開關音效（目前：開啟）';
+              showToast('抽籤音效已開啟', 'check');
+            } else {
+              icon.className = 'ph-bold ph-speaker-slash text-lg text-slate-400';
+              soundBtn.title = '開關音效（目前：靜音）';
+              showToast('抽籤音效已關閉', 'info');
+            }
+          }
+        });
+      }
+
+      // 9. Fullscreen Toggle (With Theater Mode Fallback)
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+      const fullscreenIcon = document.getElementById('fullscreenIcon');
+
+      function syncFullscreenIcon() {
+        const isNative = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        const isTheater = document.body.classList.contains('theater-mode');
+        if (fullscreenIcon) {
+          if (isNative || isTheater) {
+            fullscreenIcon.className = 'ph-bold ph-corners-in text-lg text-indigo-600';
+            fullscreenBtn.title = '退出全螢幕模式';
+          } else {
+            fullscreenIcon.className = 'ph-bold ph-corners-out text-lg text-slate-700';
+            fullscreenBtn.title = '全螢幕投影模式';
+          }
+        }
+      }
+
+      if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => {
+          const isNative = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          const isTheater = document.body.classList.contains('theater-mode');
+
+          if (isNative) {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) exit.call(document).catch(() => {});
+          } else if (isTheater) {
+            document.body.classList.remove('theater-mode');
+            syncFullscreenIcon();
+          } else {
+            const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+            if (req) {
+              req.call(document.documentElement).then(() => {
+                syncFullscreenIcon();
+              }).catch(() => {
+                // Browser/iframe restricted native fullscreen -> Fallback to theater mode
+                document.body.classList.add('theater-mode');
+                syncFullscreenIcon();
+                showToast('已開啟視窗投影最大化模式', 'info');
+              });
+            } else {
+              document.body.classList.add('theater-mode');
+              syncFullscreenIcon();
+              showToast('已開啟視窗投影最大化模式', 'info');
+            }
+          }
+        });
+      }
+
+      document.addEventListener('fullscreenchange', syncFullscreenIcon);
+      document.addEventListener('webkitfullscreenchange', syncFullscreenIcon);
+    }
+
+    // Safe bootstrap sequence for both immediate and delayed execution
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeClassroomApp);
+    } else {
+      initializeClassroomApp();
+    }
+  </script>
+</body>
+</html>
